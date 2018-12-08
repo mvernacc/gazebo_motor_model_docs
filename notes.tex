@@ -1,3 +1,12 @@
+\documentclass[12pt]{article}
+
+\usepackage{hyperref}
+
+\usepackage[style=ieee, backend=bibtex]{biblatex}
+\renewcommand{\bibfont}{\small}
+\addbibresource{notes.bib}
+
+
 \title{Gazebo Motor Model Notes}
 
 \author{Matthew Vernacchia\\
@@ -5,15 +14,15 @@ Department of Aeronautics and Astronautics, MIT}
 
 \date{\today}
 
-\documentclass[12pt]{article}
 
 \begin{document}
 \maketitle
 
-source code: https://github.com/PX4/sitl_gazebo/blob/master/src/gazebo_motor_model.cpp
+source code: \url{https://github.com/PX4/sitl_gazebo/blob/master/src/}
+$gazebo_motor_model.cpp$
 
-physics reference: http://web.mit.edu/16.unified/www/FALL/thermodynamics/notes/node86.html
+physics reference \cite{Unified}.
 
-
+\printbibliography
 
 \end{document}
