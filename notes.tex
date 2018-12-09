@@ -20,7 +20,11 @@ Department of Aeronautics and Astronautics, MIT}
 \begin{document}
 \maketitle
 
-\section{Physical Model}
+
+This document describes the mathematics and physics behind the motor/propeller model used in PX's Gazebo Software-in-the-Loop testing tool \texttt{sitl\_gazebo}. It describes a standard propeller model used in aeronautics [Section \ref{sec:physical_model}], references sources for propeller data [Section \ref{sec:propeller_data}], and then shows how to use this information to calculate the parameters used by the \texttt{sitl\_gazebo} motor/propeller model [Sections \ref{sec:gazebo_model}, \ref{sec:example}, \ref{sec:sdf}]. It concludes with a discussion of sources of error in the model [Section \ref{sec:conclusion}].
+
+
+\section{Physical Model} \label{sec:physical_model}
 Let's begin with a simple physical model of the propeller. A short introduction to propeller theory is presented in \cite{Unified}, and one can read more details in McCormick's book \cite{McCormick1979}. This model addresses the thrust and torque of a propeller which is moving through the air parallel to its axis of rotation.
 
 The model uses the following variables:
@@ -72,7 +76,7 @@ Thus, while most references will list only $C_T(J)$ and $C_P(J)$, we can easily 
 This model was developed for fixed-wing aircraft, and assumes that the air velocity is parallel to the rotation axis of the propeller. For quadrotors, the air velocity can also have a significant component perpendicular to rotation axis. This produces a force perpendicular to the thrust called the `H-force'. There are more complex models that attempt to predict the H-force. \cite{2016arXiv160100733B} provides a detailed derivation from blade element theory, and equations 1-2 of \cite{martin:hal-00422423} give a low-order model valid around hovering.
 
 
-\section{Propellers Data}
+\section{Propeller Data} \label{sec:propeller_data}
 
 Now we need to look up $C_T(J)$ and $C_P(J)$. UIUC provides a database of such data for small UAV/model aircraft propellers, available at \url{https://m-selig.ae.illinois.edu/props/propDB.html} \footnote{I've also included a zip file of the database in my repository (\url{https://github.com/mvernacc/gazebo_motor_model_docs}).}
 
@@ -84,14 +88,14 @@ Figure \ref{fig:prop_data_example} shows typical plots from this database. At st
     \caption{\label{fig:prop_data_example} Example thrust and power coefficient data for two propellers (APC 10x5E and 10x7E). Reprinted from \cite{UIUCdatabase}.}
 \end{figure}
 
-In the US, propellers are designated by two numbers ``$D_{in} \times p_{in}$'', where $D_{in}$ is the diameter in inches and $p_{in}$ is the pitch in inches\footnote{The pitch angle $\beta$ is the angle bewteen the zero-lift line of the propeller blade section and the plane of rotation. The pitch $p$ is $p = \pi D \tan \beta$ for a constant-pitch propeller.} If you cannot find your vehicle's propeller in the database, use the data from a propeller design with similar ``$D_{in} \times p_{in}$''.
+In the US, propellers are designated by two numbers ``$D_{in} \times p_{in}$'', where $D_{in}$ is the diameter in inches and $p_{in}$ is the pitch in inches\footnote{The pitch angle $\beta$ is the angle between the zero-lift line of the propeller blade section and the plane of rotation. The pitch $p$ is $p = \pi D \tan \beta$ for a constant-pitch propeller.} If you cannot find your vehicle's propeller in the database, use the data from a propeller design with similar ``$D_{in} \times p_{in}$''.
 
 If no data is available, reasonable guesses for two-blade model aircraft propellers at $J=0$ (static) are $C_T = 0.1$ and $C_P = 0.05$ ($C_Q = 0.3$).
 
 If you cannot find data for your propeller, you can also estimate the thrust and power coefficients using \emph{blade element theory}. This is rather involved. JavaProp (\url{https://www.mh-aerotools.de/airfoils/javaprop.htm}) is a free software package for perform these calculations.
 
 
-\section{Current PX4 Gazebo SITL Model}
+\section{Current PX4 Gazebo SITL Model} \label{sec:gazebo_model}
 
 The source code for the PX4 Gazebo SITL motor/propeller model is available at \url{https://github.com/PX4/sitl_gazebo/blob/master/src/gazebo_motor_model.cpp}. This model uses notation that is different from the standard propeller model notation described above. Here I will attempt to provide a translation between the two models.
 
@@ -149,7 +153,7 @@ which is taken for equation 2 in \cite{martin:hal-00422423}.The parameter $\mu_1
 In the code, $\mu_1$ is referred to as \texttt{rolling\_moment\_coefficient\_}.
 
 
-\section{Example for the Intel Aero Drone}
+\section{Example for the Intel Aero Drone}  \label{sec:example}
 The Intel Aero Drone uses \SI{230}{\milli\meter} (9 inch) propellers from Yuneec. A spare parts seller for the Yuneec Typhoon H drone, which uses the same propellers, indicates that the propellers have pitch of 6 inches. There is a similar $9 \times 6$ propeller in the UIUC database (the APC Thin Electric $9 \times 6$), which has $C_{T0} = 0.11$ and $C_{P0} = 0.051$ ($C_{Q0} = 0.32$).
 
 The $\mathtt{motor\_constant\_}$ is:
@@ -170,14 +174,26 @@ And the $\mathtt{moment\_constant\_}$ is:
 \end{equation}
 
 
-\section{How to set the Model Parameters in the SDF File}
+\section{How to set the Model Parameters in the SDF File} \label{sec:sdf}
 The Gazebo quadrotor model is defined in an SDF file for each aircraft. Within the SDF, there is a \texttt{plugin} block for each motor/propeller. These blocks start with the tag
 
 \texttt{<plugin name='XXX' filename='libgazebo\_motor\_model.so'>}
 
 where \texttt{XXX} is a unique name of the motor (see e.g. \href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/models/solo/solo.sdf#L358}{Line 358 of \texttt{solo.sdf}}). Within this block, their are tags for the \texttt{motorConstant} and \texttt{momentConstant} (the variables are named in camelCase in the SDF, but using underscores in the C++ code).
 
-The model parameters are defined for each motor/propeller separately, so if you edit the file you will have to change the value in four places (for an aircraft with four propellers).
+The model parameters are defined for each motor/propeller separately, so if you edit the file you will have to change the value in four places (for a quadrotor with four propellers).
+
+
+\section{Conclusion: Model Error Sources And Steps Forward} \label{sec:conclusion}
+
+The sections above show how to adjust the parameters of the current Gazebo motor/propeller model for the propeller diameter and propeller design of a particular multirotor. Adjusting the parameters for different propeller diameters should improve model fidelity, as some of the model parameters are very sensitive to diameter (they are proportional to $D^4$ or $D^5$).
+
+I believe there are two major remaining sources of error in this model: 1) effects of propeller-air velocity perpendicular to the propeller rotation axis and 2) aerodynamic interactions of the propeller wake with the multirotor's body.
+
+The Gazebo model makes some attempt to address the effects of propeller-air velocity perpendicular to the propeller rotation axis by implementing a model from \cite{martin:hal-00422423}. However, only some of the force and moment terms in the model are implemented, and further \cite{martin:hal-00422423} provides no verification of the accuracy of their aerodynamic model. A deeper aerodynamic analysis of propellers with off-axis airflow is found in \cite{2016arXiv160100733B} - this paper may be a good starting point for someone interested in improving this aspect of the model.
+
+Aerodynamic interactions of the propeller wake with the multirotor's body will tend to reduce the thrust and moment generated by the propellers. On the Intel Aero Drone (which has fairly thick arms in the propeller wake) we found that setting $\mathtt{moment\_constant\_}$ to about half the `theoretical' value ($0.3$ instead of $0.67$) gave simulation behavior more similar to real flight.
+
 
 \printbibliography
 
