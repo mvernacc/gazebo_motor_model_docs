@@ -9,7 +9,7 @@
 \addbibresource{notes.bib}
 
 
-\title{Gazebo Motor Model Notes}
+\title{Gazebo Motor \& Propeller Model Notes}
 
 \author{Matthew Vernacchia\\
 Department of Aeronautics and Astronautics, MIT}
@@ -21,7 +21,9 @@ Department of Aeronautics and Astronautics, MIT}
 \maketitle
 
 \section{Physical Model}
-Let's begin with a simple physical model of the propeller. A short introduction to propeller theory is presented in \cite{Unified}, and one can read more details in McCormick's book \cite{McCormick1979}. The model uses the following variables:
+Let's begin with a simple physical model of the propeller. A short introduction to propeller theory is presented in \cite{Unified}, and one can read more details in McCormick's book \cite{McCormick1979}. This model addresses the thrust and torque of a propeller which is moving through the air parallel to its axis of rotation.
+
+The model uses the following variables:
 
 \begin{itemize}
     \item $\rho$, the air density (units: \si{\kilogram\per\meter\cubed})
@@ -52,7 +54,7 @@ The thrust, torque, and power coefficients depend on the advance ratio $J$ and t
 \end{equation}
 
 
-The power and torque coefficients for all propellers are related by the equation $C_Q = 2 \pi C_P$. 
+The power and torque coefficients for all propellers are related by the equation $C_Q = C_P / 2 \pi$. Proof:
 \[
 P = Q \omega = Q (2 \pi n)
 \]
@@ -65,12 +67,14 @@ C_Q = \frac{Q}{\rho n^2 D^5} \left( \frac{n}{n} \right) = \frac{P}{2 \pi \rho n^
 C_Q =  \frac{C_P}{2 \pi}
 \end{equation}
 
-Most references will list only $C_T(J)$ and $C_P(J)$, but we can easliy find $C_Q$.
+Thus, while most references will list only $C_T(J)$ and $C_P(J)$, we can easily find $C_Q$.
+
+This model was developed for fixed-wing aircraft, and assumes that the air velocity is parallel to the rotation axis of the propeller. For quadrotors, the air velocity can also have a significant component perpendicular to rotation axis. This produces a force perpendicular to the thrust called the `H-force'. There are more complex models that attempt to predict the H-force. \cite{2016arXiv160100733B} provides a detailed derivation from blade element theory, and equations 1-2 of \cite{martin:hal-00422423} give a low-order model valid around hovering.
 
 
 \section{Propellers Data}
 
-Now we need to look up $C_T(J)$ and $C_P(J)$. UIUC provides a database of such data for small UAV/model aircraft propellers, available at \url{https://m-selig.ae.illinois.edu/props/propDB.html} \footnote{I've also incuded a zip file of the database in my repository (\url{https://github.com/mvernacc/gazebo_motor_model_docs}).}
+Now we need to look up $C_T(J)$ and $C_P(J)$. UIUC provides a database of such data for small UAV/model aircraft propellers, available at \url{https://m-selig.ae.illinois.edu/props/propDB.html} \footnote{I've also included a zip file of the database in my repository (\url{https://github.com/mvernacc/gazebo_motor_model_docs}).}
 
 Figure \ref{fig:prop_data_example} shows typical plots from this database. At static conditions, $C_T$ usually between $0.05$ and $0.2$, and then declines almost linearly with increasing $J$. Zero thrust usually occurs at $J = \SIrange{0.5}{1.0}{}$. $C_P$ is typically $0.03$ to $0.3$ at static conditions, and plateaus then declines with increasing $J$.
 
@@ -89,14 +93,81 @@ If you cannot find data for your propeller, you can also estimate the thrust and
 
 \section{Current PX4 Gazebo SITL Model}
 
-source code: \url{https://github.com/PX4/sitl_gazebo/blob/master/src/}
-$gazebo_motor_model.cpp$
+The source code for the PX4 Gazebo SITL motor/propeller model is available at \url{https://github.com/PX4/sitl_gazebo/blob/master/src/gazebo_motor_model.cpp}. This model uses notation that is different from the standard propeller model notation described above. Here I will attempt to provide a translation between the two models.
+
+The thrust calculation is on \href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/src/gazebo_motor_model.cpp#L194}{line 194}:
+
+\[
+\mathtt{force = real\_motor\_velocity * real\_motor\_velocity * motor\_constant\_}
+\]
+Converting into the standard propeller model notation,
+\[
+T = \omega^2 (\mathtt{motor\_constant\_}) = (2 \pi n)^2 (\mathtt{motor\_constant\_}) = C_{T0} \rho n^2 D^4
+\]
+Thus,
+
+\begin{equation}
+\mathtt{motor\_constant\_} = \frac{C_{T0} \rho D^4}{(2 \pi)^2}
+\end{equation}
+
+where $C_{T0}$ is the static thrust coefficient at $J = 0$. This implies that \texttt{motor\_constant\_} has units of \si{\kilogram \meter}.  Note that \texttt{motor\_constant\_} is proportional to the fourth(!) power of propeller diameter, so using the same \texttt{motor\_constant\_} for propellers of different diameters is very inaccurate.
+
+The Gazebo model then compensates for decreasing thrust at higher propeller/air velocities. It scales the force computed above by a value $\mathtt{scalar} \in [0, 1]$ (see \hyperref{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/src/gazebo_motor_model.cpp#L204}{Lines 204-8}). The scaling parameter is set to
+
+\[
+\mathtt{scalar = 1 - vel / 25.0}
+\]
+
+and then clamped to the range $[0, 1]$. This vaguely captures the general trend of declining thrust at higher airspeeds. It is not an accurate implementation of the standard propeller model, but the standard propeller model will not make accurate thrust vs. airspeed predictions for quadrotors because there is a significant perpendicular velocity component.
+
+The current Gazebo model also includes an `H-force' due to the perpendicular air velocity (see \href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/src/gazebo_motor_model.cpp#L221}{Line 221}), using a formula from equation 1 in \cite{martin:hal-00422423}:
+
+\begin{equation}
+H = - \omega \lambda_1 v_{\perp}
+\end{equation}
+
+The parameter $\lambda_1$ is (somewhat confusingly) called the \texttt{rotor\_drag\_coefficient\_} in the code.
+The parameter $\lambda_1$ is \emph{not} dimensionless; it should have units of kilograms. No numerical values or physical relations for $\lambda_1$ are given in \cite{martin:hal-00422423}.
+I do not know what value it should have or how it scales with rotor size \footnote{$\lambda_1 \sim \rho D^3$ would give the proper dimensionality.}. Perhaps \cite{2016arXiv160100733B} can give some insights?
+
+The Gazebo model then computes the rotor torque magnitude to be \texttt{force * moment\_constant\_} (\href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/src/gazebo_motor_model.cpp#L233}{Line 233}). This implies that the \texttt{moment\_constant\_} has units of meters. Under the standard propeller theory, the \texttt{moment\_constant\_} should be:
+\[
+\mathtt{moment\_constant\_} = \frac{Q}{T} = \frac{C_{Q0} \rho n^2 D^5}{C_{T0} \rho n^2 D^4}
+\]
+
+\begin{equation}
+\mathtt{moment\_constant\_} = \frac{C_{Q0}}{C_{T0}} D
+\end{equation}
+
+Finally, the Gazebo model adds a `rolling moment' (see \href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/src/gazebo_motor_model.cpp#L240}{Line 240}). The `rolling moment' is computed using the formula
+
+\begin{equation}
+M_{rolling} = - \omega \mu_1 v_\perp
+\end{equation}
+
+which is taken for equation 2 in \cite{martin:hal-00422423}.The parameter $\mu_1$ is not dimensionless; it has units of \si{\kilogram \meter}. Again, \cite{martin:hal-00422423} does not give numerical values or physical formulas for $\mu_1$, and I do not know how it scales with rotor size \footnote{$\mu_1 \sim \rho D^4$ would give the proper dimensionality.}
+In the code, $\mu_1$ is referred to as \texttt{rolling\_moment\_coefficient\_}.
 
 
-\section{How to Set the Parameters in the SDF}
+\section{Example for the Intel Aero Drone}
+The Intel Aero Drone uses \SI{230}{\milli\meter} (9 inch) propellers from Yuneec. A spare parts seller for the Yuneec Typhoon H drone, which uses the same propellers, indicates that the propellers have pitch of 6 inches. There is a similar $9 \times 6$ propeller in the UIUC database (the APC Thin Electric $9 \times 6$), which has $C_{T0} = 0.11$ and $C_{P0} = 0.051$ ($C_{Q0} = 0.32$).
 
+The $\mathtt{motor\_constant\_}$ is:
 
+\begin{equation}
+\mathtt{motor\_constant\_} = \frac{C_{T0} \rho D^4}{(2 \pi)^2} = \frac{0.11 (\SI{1.22}{\kilogram\per\meter\cubed}) (\SI{0.23}{\meter})^4}{(2 \pi)^2}
+\end{equation}
+\begin{equation}
+\mathtt{motor\_constant\_} = \SI{9.5e-6}{\kilogram\meter}
+\end{equation}
 
+And the $\mathtt{moment\_constant\_}$ is:
+\begin{equation}
+\mathtt{moment\_constant\_} = \frac{C_{Q0}}{C_{T0}} D = \frac{0.32}{0.11} (\SI{0.23}{\meter})
+\end{equation}
+\begin{equation}
+\mathtt{moment\_constant\_} = \SI{0.67}{\meter}
+\end{equation}
 
 \printbibliography
 
