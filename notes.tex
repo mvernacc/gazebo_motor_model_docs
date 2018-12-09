@@ -169,6 +169,16 @@ And the $\mathtt{moment\_constant\_}$ is:
 \mathtt{moment\_constant\_} = \SI{0.67}{\meter}
 \end{equation}
 
+
+\section{How to set the Model Parameters in the SDF File}
+The Gazebo quadrotor model is defined in an SDF file for each aircraft. Within the SDF, there is a \texttt{plugin} block for each motor/propeller. These blocks start with the tag
+
+\texttt{<plugin name='XXX' filename='libgazebo\_motor\_model.so'>}
+
+where \texttt{XXX} is a unique name of the motor (see e.g. \href{https://github.com/PX4/sitl_gazebo/blob/d08eb5b22d3edfb7a740c883b06f895a173b5519/models/solo/solo.sdf#L358}{Line 358 of \texttt{solo.sdf}}). Within this block, their are tags for the \texttt{motorConstant} and \texttt{momentConstant} (the variables are named in camelCase in the SDF, but using underscores in the C++ code).
+
+The model parameters are defined for each motor/propeller separately, so if you edit the file you will have to change the value in four places (for an aircraft with four propellers).
+
 \printbibliography
 
 \end{document}
