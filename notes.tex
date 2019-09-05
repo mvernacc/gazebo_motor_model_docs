@@ -46,8 +46,8 @@ To simulate the forces and moments on a quadrotor, we need to predict how $T$ an
 \begin{itemize}
     \item $J = v_0 / D n$, the advance ratio.
     \item $C_T = T / \rho n^2 D^4$, the thrust coefficient (this is denoted as $k_T$ in \cite{Unified}).
-    \item $C_Q = Q / \rho n^2 D^5$, the thrust coefficient (this is denoted as $k_Q$ in \cite{Unified}).
-    \item $C_P = P / \rho n^3 D^5$, the thrust coefficient (this is denoted as $k_P$ in \cite{Unified}).
+    \item $C_Q = Q / \rho n^2 D^5$, the torque coefficient (this is denoted as $k_Q$ in \cite{Unified}).
+    \item $C_P = P / \rho n^3 D^5$, the power coefficient (this is denoted as $k_P$ in \cite{Unified}).
 \end{itemize}
 
 The thrust, torque, and power coefficients depend on the advance ratio $J$ and the design of the propeller\footnote{The thrust, torque and power coefficients also depend on the Reynolds and Mach number at the tip of the propeller, but for most quadrotors this is a small effect.}. To estimate the thrust and torque, we need to look up $C_T(J)$ and $C_Q(J)$ for our propeller, and then use:
